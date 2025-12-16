@@ -1,0 +1,134 @@
+.camera-page {
+  height: calc(100vh - calc(var(--spacing-xl) * 2));
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-error {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+}
+
+.camera-layout {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: var(--spacing-lg);
+  flex: 1;
+  min-height: 0;
+}
+
+.camera-view-container {
+  min-height: 0;
+}
+
+.camera-view {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  position: relative;
+  overflow: hidden;
+}
+
+.camera-placeholder {
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.camera-placeholder svg {
+  margin: 0 auto var(--spacing-lg);
+  opacity: 0.3;
+}
+
+.camera-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+}
+
+.camera-canvas.hidden {
+  display: none;
+}
+
+.detections-sidebar {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.detections-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+
+.detection-item {
+  padding: var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.plate-number {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: var(--color-accent-primary);
+}
+
+.detection-image {
+  width: 100%;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+}
+
+.confidence-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  background: var(--color-accent-gradient);
+  transition: width var(--transition-base);
+}
+
+@media (max-width: 1024px) {
+  .camera-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  
+  .detections-sidebar {
+    max-height: 300px;
+  }
+}
