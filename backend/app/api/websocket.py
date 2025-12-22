@@ -31,6 +31,8 @@ class CameraManager:
         self.detection_service: Optional[DetectionService] = None
         self.ocr_service: Optional[OCRService] = None
         self._stream_task: Optional[asyncio.Task] = None
+        self._recent_plates: dict = {}  # Store recent plates to avoid duplicates
+        self._dedup_timeout: float = 3.0  # Seconds to wait before allowing same plate again
     
     async def connect(self, websocket: WebSocket):
         """Accept a new WebSocket connection."""
@@ -131,9 +133,12 @@ class CameraManager:
                     last_detection_time = current_time
                     
                     # Detect and annotate
-                    annotated_frame, detections = self.detection_service.detect_and_annotate(frame)
+                    annotated_frame, detections = self.detection_service.detect_and_annotate(
+                        frame, 
+                        confidence_threshold=0.4  # Lower threshold to catch more plates
+                    )
                     
-                    # Process detections
+                    # Process all detections (multi-plate support)
                     for cropped_plate, bbox, det_confidence in detections:
                         await self._process_detection(cropped_plate, bbox, det_confidence, frame)
                 else:
@@ -181,6 +186,25 @@ class CameraManager:
             
             if not plate_number:
                 return
+            
+            # Deduplication: Check if this plate was recently detected
+            current_time = asyncio.get_event_loop().time()
+            if plate_number in self._recent_plates:
+                last_time = self._recent_plates[plate_number]
+                if current_time - last_time < self._dedup_timeout:
+                    # Skip duplicate detection
+                    return
+            
+            # Update recent plates
+            self._recent_plates[plate_number] = current_time
+            
+            # Clean up old entries
+            expired_plates = [
+                p for p, t in self._recent_plates.items() 
+                if current_time - t > self._dedup_timeout * 2
+            ]
+            for p in expired_plates:
+                del self._recent_plates[p]
             
             confidence = (det_confidence + ocr_confidence) / 2
             
