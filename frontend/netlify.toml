@@ -1,0 +1,17 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# Redirect API calls to Railway backend
+[[redirects]]
+  from = "/api/*"
+  to = "${VITE_API_URL}/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback - all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

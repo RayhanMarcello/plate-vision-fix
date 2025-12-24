@@ -1,6 +1,6 @@
 .upload-page {
   width: 100%;
-  max-width: 600px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -13,7 +13,7 @@
   align-items: center;
   gap: var(--spacing-xl);
   width: 100%;
-  max-width: 600px;
+  max-width: 1200px;
 }
 
 .upload-section {
@@ -92,13 +92,14 @@
 }
 
 .results-section {
-  max-height: 700px;
-  overflow-y: auto;
+  width: 100%;
+  max-height: none;
+  overflow-y: visible;
 }
 
 .results-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-lg);
 }
 
@@ -150,7 +151,13 @@
 }
 
 @media (max-width: 1024px) {
-  .upload-layout {
+  .results-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .results-list {
     grid-template-columns: 1fr;
   }
 }

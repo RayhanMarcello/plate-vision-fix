@@ -154,6 +154,7 @@ const Detections = () => {
                   <tr>
                     <th>ID</th>
                     <th>Plate Number</th>
+                    <th>Image</th>
                     <th>Raw OCR</th>
                     <th>Confidence</th>
                     <th>Source</th>
@@ -170,6 +171,26 @@ const Detections = () => {
                         <span className="font-semibold" style={{ fontFamily: 'monospace' }}>
                           {detection.plate_number}
                         </span>
+                      </td>
+                      <td>
+                        {detection.image_data ? (
+                          <img 
+                            src={detection.image_data} 
+                            alt={detection.plate_number} 
+                            style={{ 
+                              height: '40px', 
+                              width: 'auto', 
+                              borderRadius: '4px',
+                              objectFit: 'contain',
+                              border: '1px solid var(--color-border)'
+                            }} 
+                            onClick={() => window.open(detection.image_data, '_blank')}
+                            title="Click to view full size"
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                          />
+                        ) : (
+                          <span className="text-xs text-muted">No image</span>
+                        )}
                       </td>
                       <td className="text-sm text-muted">{detection.raw_ocr_text || '-'}</td>
                       <td>
