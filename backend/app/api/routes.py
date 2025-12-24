@@ -1,16 +1,14 @@
 """
 PlateVision REST API Routes
 """
-import os
-import uuid
+import base64
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func
 
 from ..database import get_db
 from ..models.detection import DetectionResult, SourceType
@@ -23,10 +21,8 @@ from ..schemas.detection import (
 from ..services.detection import DetectionService
 from ..services.ocr import OCRService
 from ..services.validator import PlateValidator
-from ..config import get_settings
 
 router = APIRouter(prefix="/api", tags=["detection"])
-settings = get_settings()
 
 
 def get_detection_service() -> DetectionService:
@@ -37,6 +33,13 @@ def get_detection_service() -> DetectionService:
 def get_ocr_service() -> OCRService:
     """Dependency to get OCR service instance."""
     return OCRService()
+
+
+def image_to_base64(image: np.ndarray) -> str:
+    """Convert OpenCV image to base64 data URI string."""
+    _, buffer = cv2.imencode('.jpg', image)
+    base64_str = base64.b64encode(buffer).decode('utf-8')
+    return f"data:image/jpeg;base64,{base64_str}"
 
 
 @router.post("/detect/upload", response_model=list[PlateDetectionResult])
@@ -66,58 +69,60 @@ async def detect_from_upload(
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid image file")
     
-    # Save original image
-    original_filename = f"{uuid.uuid4()}_original.jpg"
-    original_path = settings.upload_path / original_filename
-    cv2.imwrite(str(original_path), image)
+    # Convert original image to base64
+    original_base64 = image_to_base64(image)
     
     # Detect plates
-    detections = detection_service.detect_plates(image)
-    
-    results = []
-    for i, (cropped_plate, bbox, det_confidence) in enumerate(detections):
-        # Run OCR on cropped plate
-        raw_text, ocr_confidence = ocr_service.extract_text(cropped_plate)
+    try:
+        detections = detection_service.detect_plates(image)
         
-        # Validate and normalize plate number
-        plate_number, is_valid, region = PlateValidator.process_ocr_result(raw_text)
-        
-        # Combined confidence (average of detection and OCR)
-        confidence = (det_confidence + ocr_confidence) / 2
-        
-        # Save cropped plate image
-        crop_filename = f"{uuid.uuid4()}_plate.jpg"
-        crop_path = settings.detection_path / crop_filename
-        cv2.imwrite(str(crop_path), cropped_plate)
-        
-        # Create result object
-        result = PlateDetectionResult(
-            plate_number=plate_number if plate_number else raw_text,
-            raw_ocr_text=raw_text,
-            confidence=round(confidence, 4),
-            is_valid=is_valid,
-            bbox=bbox,
-            cropped_image_path=f"/detections/{crop_filename}"
-        )
-        results.append(result)
-        
-        # Save to database if requested
-        if save_to_db and plate_number:
-            db_record = DetectionResult(
-                plate_number=plate_number,
+        results = []
+        for i, (cropped_plate, bbox, det_confidence) in enumerate(detections):
+            # Run OCR on cropped plate
+            raw_text, ocr_confidence = ocr_service.extract_text(cropped_plate)
+            
+            # Validate and normalize plate number
+            plate_number, is_valid, region = PlateValidator.process_ocr_result(raw_text)
+            
+            # Combined confidence (average of detection and OCR)
+            confidence = (det_confidence + ocr_confidence) / 2
+            
+            # Convert cropped plate to base64
+            plate_base64 = image_to_base64(cropped_plate)
+            
+            # Create result object
+            result = PlateDetectionResult(
+                plate_number=plate_number if plate_number else raw_text,
                 raw_ocr_text=raw_text,
-                confidence=confidence,
-                source_type=SourceType.UPLOAD,
-                image_path=f"/detections/{crop_filename}",
-                original_image_path=f"/uploads/{original_filename}",
-                is_valid=is_valid
+                confidence=round(confidence, 4),
+                is_valid=is_valid,
+                bbox=bbox,
+                cropped_image_data=plate_base64
             )
-            db.add(db_record)
-    
-    if save_to_db:
-        db.commit()
-    
-    return results
+            results.append(result)
+            
+            # Save to database if requested
+            if save_to_db and plate_number:
+                db_record = DetectionResult(
+                    plate_number=plate_number,
+                    raw_ocr_text=raw_text,
+                    confidence=confidence,
+                    source_type=SourceType.UPLOAD,
+                    image_data=plate_base64,
+                    original_image_data=original_base64,
+                    is_valid=is_valid
+                )
+                db.add(db_record)
+        
+        if save_to_db:
+            db.commit()
+        
+        return results
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
 
 @router.get("/detections", response_model=DetectionResultList)
@@ -189,17 +194,6 @@ async def delete_detection(detection_id: int, db: Session = Depends(get_db)):
     
     if not result:
         raise HTTPException(status_code=404, detail="Detection not found")
-    
-    # Delete associated images
-    if result.image_path:
-        image_file = settings.detection_path / Path(result.image_path).name
-        if image_file.exists():
-            os.remove(image_file)
-    
-    if result.original_image_path:
-        original_file = settings.upload_path / Path(result.original_image_path).name
-        if original_file.exists():
-            os.remove(original_file)
     
     db.delete(result)
     db.commit()

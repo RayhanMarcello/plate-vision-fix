@@ -9,8 +9,8 @@ from enum import Enum
 
 class SourceType(str, Enum):
     """Source type for detection."""
-    UPLOAD = "upload"
-    CAMERA = "camera"
+    UPLOAD = "UPLOAD"
+    CAMERA = "CAMERA"
 
 
 class PlateDetectionResult(BaseModel):
@@ -20,7 +20,7 @@ class PlateDetectionResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     is_valid: bool
     bbox: List[int] = Field(description="Bounding box [x1, y1, x2, y2]")
-    cropped_image_path: Optional[str] = None
+    cropped_image_data: Optional[str] = None  # base64 image data
 
 
 class DetectionResultCreate(BaseModel):
@@ -29,8 +29,8 @@ class DetectionResultCreate(BaseModel):
     raw_ocr_text: Optional[str] = Field(default=None, max_length=50)
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     source_type: SourceType = SourceType.UPLOAD
-    image_path: Optional[str] = None
-    original_image_path: Optional[str] = None
+    image_data: Optional[str] = None  # base64 image data
+    original_image_data: Optional[str] = None  # base64 image data
     is_valid: bool = False
 
 
@@ -41,8 +41,8 @@ class DetectionResultResponse(BaseModel):
     raw_ocr_text: Optional[str]
     confidence: float
     source_type: SourceType
-    image_path: Optional[str]
-    original_image_path: Optional[str]
+    image_data: Optional[str]  # base64 image data
+    original_image_data: Optional[str]  # base64 image data
     is_valid: bool
     detected_at: datetime
     

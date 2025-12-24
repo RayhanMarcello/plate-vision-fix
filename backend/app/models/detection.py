@@ -1,7 +1,8 @@
 """
 Detection Result Model
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, Text
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.sql import func
 from ..database import Base
 import enum
@@ -9,8 +10,8 @@ import enum
 
 class SourceType(str, enum.Enum):
     """Source type for detection."""
-    UPLOAD = "upload"
-    CAMERA = "camera"
+    UPLOAD = "UPLOAD"
+    CAMERA = "CAMERA"
 
 
 class DetectionResult(Base):
@@ -28,9 +29,9 @@ class DetectionResult(Base):
     # Source information
     source_type = Column(Enum(SourceType), default=SourceType.UPLOAD)
     
-    # Image paths
-    image_path = Column(String(255), nullable=True)  # Cropped plate image
-    original_image_path = Column(String(255), nullable=True)  # Original image
+    # Image data (base64 encoded)
+    image_data = Column(LONGTEXT, nullable=True)  # Cropped plate image as base64
+    original_image_data = Column(LONGTEXT, nullable=True)  # Original image as base64
     
     # Validation
     is_valid = Column(Boolean, default=False)
@@ -40,3 +41,4 @@ class DetectionResult(Base):
     
     def __repr__(self):
         return f"<DetectionResult(id={self.id}, plate='{self.plate_number}')>"
+

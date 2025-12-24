@@ -6,7 +6,6 @@ import base64
 import json
 import cv2
 import numpy as np
-from datetime import datetime
 from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -208,16 +207,12 @@ class CameraManager:
             
             confidence = (det_confidence + ocr_confidence) / 2
             
-            # Save images
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            # Convert images to base64
+            _, plate_buffer = cv2.imencode('.jpg', cropped_plate)
+            plate_base64 = f"data:image/jpeg;base64,{base64.b64encode(plate_buffer).decode('utf-8')}"
             
-            crop_filename = f"{timestamp}_plate.jpg"
-            crop_path = settings.detection_path / crop_filename
-            cv2.imwrite(str(crop_path), cropped_plate)
-            
-            original_filename = f"{timestamp}_frame.jpg"
-            original_path = settings.upload_path / original_filename
-            cv2.imwrite(str(original_path), original_frame)
+            _, frame_buffer = cv2.imencode('.jpg', original_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            frame_base64 = f"data:image/jpeg;base64,{base64.b64encode(frame_buffer).decode('utf-8')}"
             
             # Save to database
             db = SessionLocal()
@@ -227,8 +222,8 @@ class CameraManager:
                     raw_ocr_text=raw_text,
                     confidence=confidence,
                     source_type=SourceType.CAMERA,
-                    image_path=f"/detections/{crop_filename}",
-                    original_image_path=f"/uploads/{original_filename}",
+                    image_data=plate_base64,
+                    original_image_data=frame_base64,
                     is_valid=is_valid
                 )
                 db.add(db_record)
@@ -246,7 +241,7 @@ class CameraManager:
                         "is_valid": is_valid,
                         "region": region,
                         "bbox": bbox,
-                        "image_path": f"/detections/{crop_filename}",
+                        "image_data": plate_base64,
                         "detected_at": db_record.detected_at.isoformat()
                     }
                 })

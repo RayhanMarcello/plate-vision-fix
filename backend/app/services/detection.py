@@ -81,10 +81,16 @@ class DetectionService:
                 
                 # Ensure coordinates are within image bounds
                 h, w = image.shape[:2]
-                x1 = max(0, x1)
-                y1 = max(0, y1)
-                x2 = min(w, x2)
-                y2 = min(h, y2)
+                
+                # Add padding around the plate (5% of plate dimensions)
+                # This helps capture plates that are slightly cut off
+                pad_x = int((x2 - x1) * 0.05)
+                pad_y = int((y2 - y1) * 0.05)
+                
+                x1 = max(0, x1 - pad_x)
+                y1 = max(0, y1 - pad_y)
+                x2 = min(w, x2 + pad_x)
+                y2 = min(h, y2 + pad_y)
                 
                 # Crop the plate region
                 cropped = image[y1:y2, x1:x2].copy()
@@ -130,10 +136,15 @@ class DetectionService:
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                 
                 h, w = image.shape[:2]
-                x1 = max(0, x1)
-                y1 = max(0, y1)
-                x2 = min(w, x2)
-                y2 = min(h, y2)
+                
+                # Add padding around the plate (5% of plate dimensions)
+                pad_x = int((x2 - x1) * 0.05)
+                pad_y = int((y2 - y1) * 0.05)
+                
+                x1 = max(0, x1 - pad_x)
+                y1 = max(0, y1 - pad_y)
+                x2 = min(w, x2 + pad_x)
+                y2 = min(h, y2 + pad_y)
                 
                 cropped = image[y1:y2, x1:x2].copy()
                 
