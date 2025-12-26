@@ -137,9 +137,13 @@ class CameraManager:
                         confidence_threshold=0.4  # Lower threshold to catch more plates
                     )
                     
-                    # Process all detections (multi-plate support)
-                    for cropped_plate, bbox, det_confidence in detections:
-                        await self._process_detection(cropped_plate, bbox, det_confidence, frame)
+                # Process all detections (multi-plate support)
+                for cropped_plate, bbox, det_confidence in detections:
+                    # Run processing in background without blocking the stream
+                    # Pass a copy of the frame to ensure data integrity
+                    asyncio.create_task(
+                        self._process_detection(cropped_plate, bbox, det_confidence, frame.copy())
+                    )
                 else:
                     annotated_frame = frame
                 
@@ -154,7 +158,7 @@ class CameraManager:
                 })
                 
                 # Small delay to prevent overwhelming
-                await asyncio.sleep(0.033)  # ~30 FPS
+                await asyncio.sleep(0.01)  # ~100 FPS potential, but limited by camera hardware
                 
         except Exception as e:
             print(f"Stream error: {e}")
@@ -174,8 +178,15 @@ class CameraManager:
     ):
         """Process a detected plate: OCR, validate, save to DB."""
         try:
-            # Run OCR
-            raw_text, ocr_confidence = self.ocr_service.extract_text(cropped_plate)
+            loop = asyncio.get_event_loop()
+            
+            # Run OCR in a separate thread to avoid blocking the event loop
+            text_result = await loop.run_in_executor(
+                None, 
+                self.ocr_service.extract_text, 
+                cropped_plate
+            )
+            raw_text, ocr_confidence = text_result
             
             if not raw_text:
                 return
@@ -207,46 +218,55 @@ class CameraManager:
             
             confidence = (det_confidence + ocr_confidence) / 2
             
-            # Convert images to base64
+            # Prepare data for DB
+            # Encode images
             _, plate_buffer = cv2.imencode('.jpg', cropped_plate)
             plate_base64 = f"data:image/jpeg;base64,{base64.b64encode(plate_buffer).decode('utf-8')}"
             
             _, frame_buffer = cv2.imencode('.jpg', original_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             frame_base64 = f"data:image/jpeg;base64,{base64.b64encode(frame_buffer).decode('utf-8')}"
             
-            # Save to database
-            db = SessionLocal()
-            try:
-                db_record = DetectionResult(
-                    plate_number=plate_number,
-                    raw_ocr_text=raw_text,
-                    confidence=confidence,
-                    source_type=SourceType.CAMERA,
-                    image_data=plate_base64,
-                    original_image_data=frame_base64,
-                    is_valid=is_valid
-                )
-                db.add(db_record)
-                db.commit()
-                db.refresh(db_record)
-                
-                # Broadcast new detection
-                await self.broadcast({
-                    "type": "detection:new",
-                    "data": {
+            # Define DB operation function
+            def save_to_db():
+                db = SessionLocal()
+                try:
+                    db_record = DetectionResult(
+                        plate_number=plate_number,
+                        raw_ocr_text=raw_text,
+                        confidence=confidence,
+                        source_type=SourceType.CAMERA,
+                        image_data=plate_base64,
+                        original_image_data=frame_base64,
+                        is_valid=is_valid
+                    )
+                    db.add(db_record)
+                    db.commit()
+                    db.refresh(db_record)
+                    return {
                         "id": db_record.id,
-                        "plate_number": plate_number,
-                        "raw_ocr_text": raw_text,
-                        "confidence": round(confidence, 4),
-                        "is_valid": is_valid,
-                        "region": region,
-                        "bbox": bbox,
-                        "image_data": plate_base64,
                         "detected_at": db_record.detected_at.isoformat()
                     }
-                })
-            finally:
-                db.close()
+                finally:
+                    db.close()
+            
+            # Run DB operation in thread
+            result_data = await loop.run_in_executor(None, save_to_db)
+            
+            # Broadcast new detection (must be on main loop)
+            await self.broadcast({
+                "type": "detection:new",
+                "data": {
+                    "id": result_data["id"],
+                    "plate_number": plate_number,
+                    "raw_ocr_text": raw_text,
+                    "confidence": round(confidence, 4),
+                    "is_valid": is_valid,
+                    "region": region,
+                    "bbox": bbox,
+                    "image_data": plate_base64,
+                    "detected_at": result_data["detected_at"]
+                }
+            })
                 
         except Exception as e:
             print(f"Detection processing error: {e}")

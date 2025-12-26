@@ -125,6 +125,94 @@ async def detect_from_upload(
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
 
+@router.post("/detect/frame")
+async def detect_from_frame(
+    file: UploadFile = File(...),
+    save_to_db: bool = Query(True, description="Save results to database"),
+    db: Session = Depends(get_db),
+    detection_service: DetectionService = Depends(get_detection_service),
+    ocr_service: OCRService = Depends(get_ocr_service)
+):
+    """
+    Detect license plates from a single frame (for browser camera).
+    
+    Optimized for real-time detection from browser webcam.
+    Returns list of detected plates with their OCR results.
+    """
+    # Read file content
+    content = await file.read()
+    
+    # Convert to numpy array
+    nparr = np.frombuffer(content, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if image is None:
+        return {"detections": [], "message": "Invalid frame"}
+    
+    try:
+        # Detect plates
+        detections = detection_service.detect_plates(image)
+        
+        if not detections:
+            return {"detections": []}
+        
+        # Convert original image to base64
+        original_base64 = image_to_base64(image)
+        
+        results = []
+        for i, (cropped_plate, bbox, det_confidence) in enumerate(detections):
+            # Run OCR on cropped plate
+            raw_text, ocr_confidence = ocr_service.extract_text(cropped_plate)
+            
+            if not raw_text:
+                continue
+            
+            # Validate and normalize plate number
+            plate_number, is_valid, region = PlateValidator.process_ocr_result(raw_text)
+            
+            if not plate_number:
+                continue
+            
+            # Combined confidence
+            confidence = (det_confidence + ocr_confidence) / 2
+            
+            # Convert cropped plate to base64
+            plate_base64 = image_to_base64(cropped_plate)
+            
+            result = {
+                "plate_number": plate_number,
+                "raw_ocr_text": raw_text,
+                "confidence": round(confidence, 4),
+                "is_valid": is_valid,
+                "bbox": bbox,
+                "image_data": plate_base64
+            }
+            results.append(result)
+            
+            # Save to database if requested
+            if save_to_db:
+                db_record = DetectionResult(
+                    plate_number=plate_number,
+                    raw_ocr_text=raw_text,
+                    confidence=confidence,
+                    source_type=SourceType.CAMERA,
+                    image_data=plate_base64,
+                    original_image_data=original_base64,
+                    is_valid=is_valid
+                )
+                db.add(db_record)
+        
+        if save_to_db and results:
+            db.commit()
+        
+        return {"detections": results}
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"detections": [], "error": str(e)}
+
+
 @router.get("/detections", response_model=DetectionResultList)
 async def list_detections(
     page: int = Query(1, ge=1),
