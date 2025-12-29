@@ -1,15 +1,33 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload as UploadIcon, Image as ImageIcon, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { uploadImage } from '../services/api';
 import './Upload.css';
 
+// Module-level cache to persist state across navigation
+let cachedState = {
+  selectedFile: null,
+  preview: null,
+  results: null,
+  error: null
+};
+
 const Upload = () => {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(cachedState.selectedFile);
+  const [preview, setPreview] = useState(cachedState.preview);
   const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState(null);
+  const [results, setResults] = useState(cachedState.results);
+  const [error, setError] = useState(cachedState.error);
   const fileInputRef = useRef(null);
+
+  // Sync state to cache
+  useEffect(() => {
+    cachedState = {
+      selectedFile,
+      preview,
+      results,
+      error
+    };
+  }, [selectedFile, preview, results, error]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];

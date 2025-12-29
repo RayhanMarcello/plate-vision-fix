@@ -1448,6 +1448,112 @@ class OCRService:
         
         return closed
     
+    def remove_shadows(self, image: np.ndarray) -> np.ndarray:
+        """
+        Remove shadows using illumination normalization (division by background).
+        """
+        if len(image.shape) == 3:
+            planes = cv2.split(image)
+            result_planes = []
+            
+            for plane in planes:
+                # 1. Dilate to remove text features (get background)
+                dilated_img = cv2.dilate(plane, np.ones((7, 7), np.uint8))
+                
+                # 2. Median blur to smooth the background
+                bg_img = cv2.medianBlur(dilated_img, 21)
+                
+                # 3. Calculate difference (255 - abs(plane - bg))
+                # diff_img = 255 - cv2.absdiff(plane, bg_img)
+                
+                # 3. Normalize: raw / background
+                # Avoid division by zero
+                diff_img = 255 - cv2.absdiff(plane, bg_img)
+                norm_img = cv2.normalize(diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+                
+                result_planes.append(norm_img)
+                
+            result = cv2.merge(result_planes)
+        else:
+            # Gray scale version
+            dilated_img = cv2.dilate(image, np.ones((7, 7), np.uint8))
+            bg_img = cv2.medianBlur(dilated_img, 21)
+            diff_img = 255 - cv2.absdiff(image, bg_img)
+            result = cv2.normalize(diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            
+        return result
+
+
+    def remove_small_noise(self, image: np.ndarray, min_area: int = 10, max_area: int = 150) -> np.ndarray:
+        """
+        Remove small noise (like screws/bolts/dirt) from binary image.
+        """
+        # Ensure binary
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        else:
+            binary = image.copy()
+            
+        # Find contours
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        mask = np.ones(binary.shape, dtype=np.uint8) * 255
+        
+        cleaned = binary.copy()
+        
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            # If contour is too small (noise/screw), remove it (shape it black)
+            if area < min_area:
+                cv2.drawContours(cleaned, [cnt], -1, 0, -1)
+            # Optional: Remove very large blobs that aren't text
+            # elif area > 5000:
+            #     cv2.drawContours(cleaned, [cnt], -1, 0, -1)
+                
+        return cleaned
+
+    def preprocess_pipeline_shadows(self, image: np.ndarray) -> np.ndarray:
+        """
+        Pipeline specifically designed for images with strong shadows/variable lighting.
+        Includes Noise Bolt Removal.
+        """
+        img = self.resize_image(image, target_height=120)
+        
+        # 1. Remove shadows
+        img = self.remove_shadows(img)
+        
+        # 2. Convert to gray
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = img.copy()
+            
+        # 3. Enhance contrast (CLAHE)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        
+        # 4. Sharpen
+        enhanced = self.sharpen_image(enhanced)
+        
+        # 5. Otsu thresholding
+        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # 6. Clean up small noise (screws/bolts)
+        # Invert first if needed (we want white text on black background for finding contours properly)
+        if np.mean(binary) > 127:
+            binary = cv2.bitwise_not(binary)
+            
+        # Use smaller min_area to avoid removing parts of letters (like 'H')
+        binary = self.remove_small_noise(binary, min_area=15)
+        
+        # 7. Morphological cleanup - USE CLOSE instead of OPEN to connect broken characters
+        # "H" was breaking into "I I" because of Opening (erosion). Closing (dilation) fixes this.
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        
+        return binary
+
     def preprocess_pipeline_minimal(self, image: np.ndarray) -> np.ndarray:
         """Minimal preprocessing - just resize and enhance."""
         img = self.resize_image(image, target_height=80)
@@ -1658,8 +1764,16 @@ class OCRService:
         persp_inv_clahe = persp_clahe.apply(persp_inverted)
         preprocessed_images.append(("perspective_dark", persp_inv_clahe))
         
+        # Approach 20: SHADOW REMOVAL - Explicit shadow removal pipeline
+        shadow_removed = self.preprocess_pipeline_shadows(image.copy())
+        preprocessed_images.append(("shadow_removed", shadow_removed))
+        
         
         # Try each preprocessed image
+        candidates = []
+        
+        print(f"--- Starting OCR Extraction on {len(preprocessed_images)} pipelines ---")
+        
         for name, processed in preprocessed_images:
             try:
                 # Run OCR with parameters optimized for thin characters like 'I'
@@ -1734,31 +1848,78 @@ class OCRService:
                     combined = " ".join(texts)
                     avg_conf = sum(confidences) / len(confidences)
                     
-                    # Validity check
-                    cleaned = combined.replace(' ', '')
-                    is_valid = bool(re.match(r'^[A-Z]{1,2}\d{1,4}[A-Z]{0,3}$', cleaned))
+                    # Apply correction immediately to check validity
+                    corrected_text, boost_conf = self.apply_character_correction(combined, avg_conf)
                     
-                    # Score calculation
-                    score = avg_conf * (1.3 if is_valid else 1.0)
+                    # Check validity
+                    cleaned = corrected_text.replace(' ', '')
+                    match = re.match(r'^([A-Z]{1,2})(\d{1,4})([A-Z]{1,3})$', cleaned)
+                    is_valid = False
                     
-                    # Prefer results with valid plate format
-                    if score > best_confidence or (is_valid and best_confidence < 0.7):
-                        best_text = combined
-                        best_confidence = avg_conf
-                        
-                        # Early exit if very confident and valid
-                        if is_valid and avg_conf > 0.8:
-                            break
+                    if match:
+                        region, numbers, suffix = match.groups()
+                        # STRICT CHECK: Region code must exist in Indonesia
+                        if region in self.INDONESIAN_REGION_CODES:
+                            is_valid = True
+                        else:
+                            # Demote invalid regions (like "IL")
+                            is_valid = False
+                    
+                    # Store candidate
+                    candidates.append({
+                        'text': corrected_text,
+                        'original_text': combined,
+                        'confidence': avg_conf,
+                        'boost_conf': boost_conf,
+                        'is_valid': is_valid,
+                        'method': name,
+                        'raw_length': len(cleaned)
+                    })
+                    print(f"Pipeline '{name}': '{corrected_text}' (conf={avg_conf:.2f}, valid={is_valid})")
                         
             except Exception as e:
                 print(f"OCR '{name}' error: {e}")
                 continue
         
-        # Apply character correction
-        if best_text:
-            best_text, best_confidence = self.apply_character_correction(best_text, best_confidence)
+        # === SELECTION LOGIC ===
         
-        return best_text, best_confidence
+        if not candidates:
+            return "", 0.0
+            
+        # 1. Prioritize Valid Indonesian Plates
+        valid_candidates = [c for c in candidates if c['is_valid']]
+        
+        if valid_candidates:
+            # Sort by confidence
+            valid_candidates.sort(key=lambda x: x['boost_conf'], reverse=True)
+            best = valid_candidates[0]
+            print(f"SELECTED VALID: '{best['text']}' from '{best['method']}'")
+            return best['text'], best['boost_conf']
+            
+        # 2. Fallback: Look for "plausible" plates even if strictly invalid
+        # e.g. "B 1234" (missing suffix) or "1234 ABC" (missing region)
+        # But filter out obvious noise (single letters, very short strings)
+        
+        plausible_candidates = [
+            c for c in candidates 
+            if c['raw_length'] >= 3  # Ignore single/double characters
+            and not (c['raw_length'] == 1) # Double check
+        ]
+        
+        if plausible_candidates:
+            # Sort by confidence
+            plausible_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+            best = plausible_candidates[0]
+            print(f"SELECTED PLAUSIBLE: '{best['text']}' from '{best['method']}'")
+            return best['text'], best['confidence']
+            
+        # 3. Last Resort: Just take the highest confidence non-empty result
+        # But try to avoid single-letter noise if possible
+        candidates.sort(key=lambda x: x['confidence'], reverse=True)
+        best = candidates[0]
+        print(f"SELECTED FALLBACK: '{best['text']}' from '{best['method']}'")
+        
+        return best['text'], best['confidence']
     
     def extract_text_with_alternatives(
         self, 

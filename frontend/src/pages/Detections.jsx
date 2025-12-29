@@ -184,9 +184,6 @@ const Detections = () => {
                               objectFit: 'contain',
                               border: '1px solid var(--color-border)'
                             }} 
-                            onClick={() => window.open(detection.image_data, '_blank')}
-                            title="Click to view full size"
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
                           />
                         ) : (
                           <span className="text-xs text-muted">No image</span>
