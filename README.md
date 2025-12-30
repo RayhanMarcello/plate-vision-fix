@@ -4,13 +4,13 @@ Sistema deteksi dan pengenalan plat nomor kendaraan Indonesia berbasis AI menggu
 
 ## 🚀 Fitur Utama
 
-- ✅ **Deteksi Real-time** - Streaming kamera langsung dengan deteksi otomatis
-- ✅ **Upload Gambar** - Upload foto kendaraan untuk deteksi batch
-- ✅ **OCR Cerdas** - Pengenalan karakter dengan EasyOCR
-- ✅ **Validasi Indonesia** - Normalisasi dan validasi format plat Indonesia
-- ✅ **Database MySQL** - Penyimpanan hasil deteksi
-- ✅ **Dashboard Admin** - Antarmuka web modern untuk manajemen
-- ✅ **Statistik Real-time** - Analytics dan visualisasi performa
+- **Deteksi Real-time** - Streaming kamera langsung dengan deteksi otomatis
+- **Upload Gambar** - Upload foto kendaraan untuk deteksi batch
+- **OCR Cerdas** - Pengenalan karakter dengan EasyOCR
+- **Validasi Indonesia** - Normalisasi dan validasi format plat Indonesia
+- **Database MySQL** - Penyimpanan hasil deteksi
+- **Dashboard Admin** - Antarmuka web modern untuk manajemen
+- **Statistik Real-time** - Analytics dan visualisasi performa
 
 ## 📋 Persyaratan Sistem
 
@@ -143,7 +143,7 @@ plateVision-ippl/
 | GET | `/api/detections/{id}` | Get single detection |
 | DELETE | `/api/detections/{id}` | Delete detection |
 | GET | `/api/statistics` | Get system statistics |
-| GET | `/api/health` | Health check |
+
 
 ### WebSocket
 
@@ -229,15 +229,4 @@ netstat -ano | findstr :8000
 - Model disimpan di user home directory
 - Butuh koneksi internet yang stabil
 
-### Camera tidak terdeteksi
-- Pastikan webcam terhubung
-- Cek camera permissions di browser
-- Ganti `CAMERA_INDEX` di `.env` jika perlu
 
-## 📝 License
-
-Proyek ini dibuat untuk keperluan sistem parkir dan monitoring lalu lintas.
-
-## 👥 Kontributor
-
-Developed by PlateVision Team
