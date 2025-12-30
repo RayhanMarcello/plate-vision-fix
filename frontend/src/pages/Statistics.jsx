@@ -82,8 +82,8 @@ const Statistics = () => {
 
   return (
     <div className="statistics-page fade-in">
-      <div className="flex justify-between items-end" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-md" style={{ marginBottom: 'var(--spacing-xl)' }}>
+        <div className="mb-4 md:mb-0">
           <h1 className="text-3xl font-bold" style={{ 
             background: 'linear-gradient(to right, #ffffff, #9ca3af)',
             WebkitBackgroundClip: 'text',
@@ -94,7 +94,7 @@ const Statistics = () => {
           </h1>
           <p className="text-secondary mt-1" style={{ marginTop: '0.25rem' }}>Real-time system performance monitoring</p>
         </div>
-        <div className="flex gap-sm items-center text-sm text-secondary" style={{ 
+        <div className="flex gap-sm items-center text-sm text-secondary whitespace-nowrap" style={{ 
           background: 'rgba(255, 255, 255, 0.05)', 
           padding: '4px 12px', 
           borderRadius: '9999px',

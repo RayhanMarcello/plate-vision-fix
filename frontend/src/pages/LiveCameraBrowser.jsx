@@ -179,13 +179,13 @@ const LiveCameraBrowser = () => {
 
   return (
     <div className="camera-page fade-in">
-      <div className="flex justify-between items-center" style={{ marginBottom: 'var(--spacing-xl)' }}>
+      <div className="page-header flex flex-col md:flex-row justify-between items-start md:items-center gap-md" style={{ marginBottom: 'var(--spacing-xl)' }}>
         <div>
           <h1 className="text-2xl font-bold">Live Camera</h1>
           <p className="text-secondary">Real-time Plate detection (Browser Camera)</p>
         </div>
         
-        <div className="flex gap-md items-center">
+        <div className="flex flex-col sm:flex-row gap-md items-start sm:items-center w-full sm:w-auto mt-4 md:mt-0">
           <div className="flex gap-sm items-center">
             <div className={`status-indicator ${isStreaming ? 'active' : ''}`}></div>
             <span className="text-sm text-secondary">
@@ -195,7 +195,7 @@ const LiveCameraBrowser = () => {
           
           <button 
             onClick={handleToggleCamera}
-            className={`btn btn-lg ${isStreaming ? 'btn-error' : 'btn-primary'}`}
+            className={`btn btn-lg w-full sm:w-auto ${isStreaming ? 'btn-error' : 'btn-primary'}`}
           >
             {isStreaming ? (
               <>

@@ -136,28 +136,129 @@
   padding: var(--spacing-xl);
 }
 
+/* Mobile Menu Button - Hidden on Desktop */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: var(--spacing-md);
+  left: var(--spacing-md);
+  z-index: 100;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+/* Mobile Menu Button - Floating Fixed */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-menu-btn:hover {
+  background: var(--color-bg-elevated);
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .sidebar {
-    width: 80px;
+    position: fixed;
+    left: -280px;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    width: 280px; /* Keep full width on mobile */
+    transition: transform var(--transition-base);
+    box-shadow: var(--shadow-xl);
   }
-  
-  .sidebar-header,
-  .sidebar-footer {
-    padding: var(--spacing-md);
+
+  .sidebar.open {
+    transform: translateX(280px);
   }
-  
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 900;
+    backdrop-filter: blur(4px);
+  }
+
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .sidebar-close-btn {
+    display: block;
+    padding: var(--spacing-xs);
+  }
+
+  /* Restore full elements on mobile since it's a drawer now */
   .logo-title,
   .logo-subtitle,
   .nav-link span,
   .system-status span {
-    display: none;
+    display: block;
   }
   
   .logo {
-    justify-content: center;
+    justify-content: flex-start;
   }
   
   .nav-link {
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  .main-content {
+    /* Push content down to avoid collision with fixed hamburger button */
+    padding: var(--spacing-md);
+    padding-top: calc(1rem + 40px + 1rem); /* top + button_h + gap */
   }
 }
